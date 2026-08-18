@@ -87,18 +87,30 @@ health_url() {
 }
 
 health_check() {
-    local domain="$1" url status
+    local domain="$1" url status response
     url="$(health_url "$domain")"
-    status="$(run_command "$WATCHDOG_CURL_COMMAND" \
-        --silent --show-error --location \
+    if ! response="$(run_command "$WATCHDOG_CURL_COMMAND" \
+        --silent --show-error --location --insecure \
         --connect-timeout "$WATCHDOG_CONNECT_TIMEOUT_SECONDS" \
         --max-time "$WATCHDOG_REQUEST_TIMEOUT_SECONDS" \
         --user-agent "$WATCHDOG_USER_AGENT" \
         --header 'Cache-Control: no-cache, no-store, max-age=0' \
         --header 'Pragma: no-cache' \
-        --output /dev/null --write-out '%{http_code}' "$url" 2>/dev/null || true)"
-    [[ "$status" =~ ^[0-9]{3}$ ]] || return 1
-    (( status >= WATCHDOG_SUCCESS_MIN && status <= WATCHDOG_SUCCESS_MAX ))
+        --output /dev/null --write-out '%{http_code}' "$url" 2>&1)"; then
+        response="${response//$'\n'/ }"
+        printf 'health_check_failed domain=%s detail=%s\n' "$domain" "$response" >&2
+        return 1
+    fi
+    status="$response"
+    if [[ ! "$status" =~ ^[0-9]{3}$ ]]; then
+        printf 'health_check_failed domain=%s detail=invalid_http_status:%s\n' "$domain" "$status" >&2
+        return 1
+    fi
+    if (( status < WATCHDOG_SUCCESS_MIN || status > WATCHDOG_SUCCESS_MAX )); then
+        printf 'health_check_failed domain=%s http_status=%s\n' "$domain" "$status" >&2
+        return 1
+    fi
+    return 0
 }
 
 log_restart() {

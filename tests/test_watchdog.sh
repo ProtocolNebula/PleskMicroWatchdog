@@ -86,7 +86,23 @@ EOF
     export TEST_ROOT
     health_check 'example.com'
     grep -Eq -- '--location| -L' "$TEST_ROOT/curl-args"
+    grep -Eq -- '--insecure| -k' "$TEST_ROOT/curl-args"
     grep -Eq 'health=[0-9]+' "$TEST_ROOT/curl-args"
+}
+
+test_failed_health_check_reports_curl_diagnostic() {
+    cat > "$WATCHDOG_CURL_COMMAND" <<'EOF'
+#!/usr/bin/env bash
+printf 'curl: (6) Could not resolve host\n' >&2
+exit 6
+EOF
+    chmod +x "$WATCHDOG_CURL_COMMAND"
+    local diagnostic
+    diagnostic="$(health_check 'broken.example.com' 2>&1 || true)"
+    [[ "$diagnostic" == *'health_check_failed domain=broken.example.com'* ]] || {
+        printf 'FAIL: failed health checks expose diagnostics (actual=%q)\n' "$diagnostic" >&2
+        exit 1
+    }
 }
 
 test_third_failure_restarts_once_per_pass() {
@@ -138,6 +154,7 @@ EOF
 
 run_test test_domain_discovery_uses_site_list_only
 run_test test_health_check_adds_timestamp_query_and_accepts_redirect
+run_test test_failed_health_check_reports_curl_diagnostic
 run_test test_third_failure_restarts_once_per_pass
 run_test test_success_does_not_reset_global_counter
 printf 'All tests passed.\n'

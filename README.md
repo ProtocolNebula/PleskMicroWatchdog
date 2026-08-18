@@ -12,7 +12,7 @@ For every pass:
 2. The result of `plesk bin site --list` is used as-is as the domain list.
 3. Domains are checked sequentially over HTTPS at `/`.
 4. Each request appends `?health=<Unix timestamp>` and sends no-cache headers.
-5. HTTP redirects are followed with `curl -L`. The final status code from 200 through 399 is considered successful.
+5. HTTP redirects are followed with `curl -L --insecure`. Certificate validation is intentionally disabled because this is an availability check and expired certificates must not prevent the website request. The final status code from 200 through 399 is considered successful.
 6. The process waits 30 seconds before checking the next domain.
 7. The global failure counter starts at zero at the beginning of every complete pass.
 8. Each failed domain increments the global counter. Successful domains do not reset it.
@@ -55,6 +55,16 @@ The installer:
 
 The installer is safe to run again. An existing configuration file is preserved.
 
+## Update
+
+Pull/update the repo, then run:
+
+```bash
+cd ~/tools/PleskMicroWatchdog
+sudo bash bin/install.sh
+sudo systemctl restart plesk-watchdog.service
+```
+
 ## Review the domain list before enabling production monitoring
 
 Run these commands on the server:
@@ -90,7 +100,7 @@ Main settings:
 
 The first version intentionally uses one global counter per pass, not a persistent counter per domain.
 
-## Inspect the service
+## Inspect the service / logs
 
 ```bash
 sudo systemctl status plesk-watchdog.service
@@ -107,12 +117,25 @@ Example event log line:
 
 Only restart events are written to this file. `systemd` may still report service errors in the journal.
 
+Failed health checks are intentionally reported in the journal, not in `watchdog.log`, for diagnosis. Examples include DNS errors, TLS errors, timeouts, and unexpected HTTP status codes:
+
+```text
+health_check_failed domain=example.com detail=curl: (6) Could not resolve host
+health_check_failed domain=example.com http_status=503
+```
+
+Inspect them with:
+
+```bash
+sudo journalctl -u plesk-watchdog.service --since today | grep health_check_failed
+```
+
 ## Manual checks
 
 Run the health request manually:
 
 ```bash
-curl --silent --show-error --location \
+curl --silent --show-error --location --insecure \
   --connect-timeout 10 --max-time 30 \
   --header 'Cache-Control: no-cache, no-store, max-age=0' \
   --header 'Pragma: no-cache' \
@@ -163,4 +186,4 @@ Before deployment, also perform a real-server validation on a non-critical Plesk
 
 ## Security notes
 
-The service runs as root because it must invoke the Plesk CLI and restart Apache. The installer uses a restrictive umask and file permissions. Do not place secrets in the configuration file. The health query parameter is not an authentication mechanism.
+The service runs as root because it must invoke the Plesk CLI and restart Apache. The installer uses a restrictive umask and file permissions. TLS certificate validation is intentionally disabled for this health check; do not reuse this request pattern for authentication or sensitive data. Do not place secrets in the configuration file. The health query parameter is not an authentication mechanism.
