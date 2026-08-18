@@ -16,8 +16,7 @@ export WATCHDOG_SCHEME="https"
 export WATCHDOG_PATH="/"
 export WATCHDOG_APACHE_SERVICE="apache2"
 export WATCHDOG_DOMAIN_COMMAND="$TEST_ROOT/bin/plesk"
-export WATCHDOG_SUBDOMAIN_COMMAND="$TEST_ROOT/bin/subdomain"
-export WATCHDOG_ALIAS_COMMAND="$TEST_ROOT/bin/domalias"
+
 export WATCHDOG_CURL_COMMAND="$TEST_ROOT/bin/curl"
 export WATCHDOG_SYSTEMCTL_COMMAND="$TEST_ROOT/bin/systemctl"
 export WATCHDOG_SLEEP_COMMAND="$TEST_ROOT/bin/sleep"
@@ -34,8 +33,7 @@ WATCHDOG_SCHEME=https
 WATCHDOG_PATH=/
 WATCHDOG_APACHE_SERVICE=apache2
 WATCHDOG_DOMAIN_COMMAND=$WATCHDOG_DOMAIN_COMMAND
-WATCHDOG_SUBDOMAIN_COMMAND=$WATCHDOG_SUBDOMAIN_COMMAND
-WATCHDOG_ALIAS_COMMAND=$WATCHDOG_ALIAS_COMMAND
+
 WATCHDOG_CURL_COMMAND=$WATCHDOG_CURL_COMMAND
 WATCHDOG_SYSTEMCTL_COMMAND=$WATCHDOG_SYSTEMCTL_COMMAND
 WATCHDOG_SLEEP_COMMAND=$WATCHDOG_SLEEP_COMMAND
@@ -46,15 +44,6 @@ cat > "$WATCHDOG_DOMAIN_COMMAND" <<'EOF'
 printf '%s\n' 'example.com' 'blog.example.com' 'alias.example.net'
 EOF
 
-cat > "$WATCHDOG_SUBDOMAIN_COMMAND" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' 'blog.example.com'
-EOF
-
-cat > "$WATCHDOG_ALIAS_COMMAND" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' 'alias.example.net'
-EOF
 
 cat > "$WATCHDOG_SLEEP_COMMAND" <<'EOF'
 #!/usr/bin/env bash
@@ -81,10 +70,10 @@ run_test() {
     printf 'PASS: %s\n' "$name"
 }
 
-test_domain_discovery_excludes_subdomains_and_aliases() {
+test_domain_discovery_uses_site_list_only() {
     local domains
     domains="$(discover_domains)"
-    assert_equal 'example.com' "$domains" 'only primary domains remain after exclusions'
+    assert_equal $'example.com\nblog.example.com\nalias.example.net' "$domains" 'site list is the only domain source'
 }
 
 test_health_check_adds_timestamp_query_and_accepts_redirect() {
@@ -147,7 +136,7 @@ EOF
     assert_equal '0' "$restarts" 'a successful domain does not hide previous failures'
 }
 
-run_test test_domain_discovery_excludes_subdomains_and_aliases
+run_test test_domain_discovery_uses_site_list_only
 run_test test_health_check_adds_timestamp_query_and_accepts_redirect
 run_test test_third_failure_restarts_once_per_pass
 run_test test_success_does_not_reset_global_counter

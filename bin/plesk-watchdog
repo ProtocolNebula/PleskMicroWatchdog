@@ -10,8 +10,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 : "${WATCHDOG_STATE_DIR:="$PROJECT_DIR/var"}"
 : "${WATCHDOG_LOCK_FILE:="$WATCHDOG_STATE_DIR/plesk-watchdog.lock"}"
 : "${WATCHDOG_DOMAIN_COMMAND:="plesk bin site --list"}"
-: "${WATCHDOG_SUBDOMAIN_COMMAND:="plesk bin subdomain --list"}"
-: "${WATCHDOG_ALIAS_COMMAND:="plesk bin domalias --list"}"
+
 : "${WATCHDOG_CURL_COMMAND:="curl"}"
 : "${WATCHDOG_SYSTEMCTL_COMMAND:="systemctl"}"
 : "${WATCHDOG_SLEEP_COMMAND:="sleep"}"
@@ -66,23 +65,8 @@ valid_hostname() {
     [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.?$ ]]
 }
 
-list_exclusions() {
-    local command_line="$1" output
-    [[ -n "$command_line" ]] || return 0
-    if output="$(command_output "$command_line" 2>/dev/null)"; then
-        printf '%s\n' "$output" | sed -E 's/[[:space:]]+$//' | awk 'NF {print $1}'
-    fi
-}
-
 discover_domains() {
     local output domain
-    local -A excluded=()
-    while IFS= read -r domain; do
-        [[ -n "$domain" ]] && excluded["$domain"]=1
-    done < <(list_exclusions "$WATCHDOG_SUBDOMAIN_COMMAND")
-    while IFS= read -r domain; do
-        [[ -n "$domain" ]] && excluded["$domain"]=1
-    done < <(list_exclusions "$WATCHDOG_ALIAS_COMMAND")
 
     output="$(command_output "$WATCHDOG_DOMAIN_COMMAND" 2>/dev/null)" || {
         printf 'Unable to obtain domains using: %s\n' "$WATCHDOG_DOMAIN_COMMAND" >&2
@@ -90,7 +74,6 @@ discover_domains() {
     }
     printf '%s\n' "$output" | awk 'NF {print $1}' | sed -E 's/[[:space:]]+$//' | while IFS= read -r domain; do
         valid_hostname "$domain" || continue
-        [[ -n "${excluded[$domain]:-}" ]] && continue
         printf '%s\n' "$domain"
     done | awk '!seen[$0]++'
 }

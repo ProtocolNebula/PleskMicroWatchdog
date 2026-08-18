@@ -5,8 +5,7 @@ WATCHDOG_LOG=/usr/local/libexec/plesk-watchdog/watchdog.log
 WATCHDOG_STATE_DIR=/usr/local/libexec/plesk-watchdog/state
 WATCHDOG_LOCK_FILE=/usr/local/libexec/plesk-watchdog/plesk-watchdog.lock
 WATCHDOG_DOMAIN_COMMAND="plesk bin site --list"
-WATCHDOG_SUBDOMAIN_COMMAND="plesk bin subdomain --list"
-WATCHDOG_ALIAS_COMMAND="plesk bin domalias --list"
+
 WATCHDOG_CURL_COMMAND="curl"
 WATCHDOG_SYSTEMCTL_COMMAND="systemctl"
 WATCHDOG_SLEEP_COMMAND="sleep"

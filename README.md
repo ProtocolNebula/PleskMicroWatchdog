@@ -9,7 +9,7 @@ All project documentation and files are written in English.
 For every pass:
 
 1. The watchdog obtains the domain list with `plesk bin site --list`.
-2. Subdomains and aliases are removed using the Plesk `subdomain` and `domalias` CLI lists.
+2. The result of `plesk bin site --list` is used as-is as the domain list.
 3. Domains are checked sequentially over HTTPS at `/`.
 4. Each request appends `?health=<Unix timestamp>` and sends no-cache headers.
 5. HTTP redirects are followed with `curl -L`. The final status code from 200 through 399 is considered successful.
@@ -61,11 +61,9 @@ Run these commands on the server:
 
 ```bash
 plesk bin site --list
-plesk bin subdomain --list
-plesk bin domalias --list
 ```
 
-The watchdog expects the first whitespace-separated field of each output line to be the hostname. If the installed Plesk version uses a different format, update the discovery function before production use and add a regression test.
+The watchdog expects the first whitespace-separated field of each output line to be the hostname. If the installed Plesk version uses a different format, update the discovery function before production use and add a regression test. No additional Plesk commands are used for filtering.
 
 ## Configuration
 
@@ -155,7 +153,7 @@ bash tests/test_watchdog.sh
 
 Before deployment, also perform a real-server validation on a non-critical Plesk host:
 
-1. Confirm the primary domain list and exclusions.
+1. Confirm the domain list returned by `plesk bin site --list`.
 2. Confirm every generated URL contains `?health=<timestamp>`.
 3. Confirm successful requests do not appear in `watchdog.log`.
 4. Create a controlled failure for three domains in one pass.
