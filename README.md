@@ -12,7 +12,7 @@ For every pass:
 2. The result of `plesk bin site --list` is used as-is as the domain list.
 3. Domains are checked sequentially over HTTPS at `/`.
 4. Each request appends `?health=<Unix timestamp>` and sends no-cache headers.
-5. HTTP redirects are followed with `curl -L --insecure`. Certificate validation is intentionally disabled because this is an availability check and expired certificates must not prevent the website request. The final status code from 200 through 399 is considered successful.
+5. HTTP redirects are followed with `curl -L --insecure`. Certificate validation is intentionally disabled because this is an availability check and expired certificates must not prevent the website request. The final status code from 200 through 399, plus HTTP 503, is considered valid.
 6. The process waits 30 seconds before checking the next domain.
 7. The global failure counter starts at zero at the beginning of every complete pass.
 8. Each failed domain increments the global counter. Successful domains do not reset it.
@@ -97,8 +97,9 @@ Main settings:
 | `WATCHDOG_PATH` | `/` | URL path |
 | `WATCHDOG_SUCCESS_MIN` | `200` | Lowest successful final HTTP status |
 | `WATCHDOG_SUCCESS_MAX` | `399` | Highest successful final HTTP status |
+| `WATCHDOG_ACCEPTED_STATUS_CODES` | `503` | Additional final HTTP status codes accepted as valid |
 
-The first version intentionally uses one global counter per pass, not a persistent counter per domain.
+HTTP 503 is accepted because Plesk may list inactive sites in `plesk bin site --list`; those sites can consistently return 503 and must not trigger Apache restarts. The first version intentionally uses one global counter per pass, not a persistent counter per domain.
 
 ## Inspect the service / logs
 

@@ -25,6 +25,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 : "${WATCHDOG_USER_AGENT:=plesk-watchdog/1.0}"
 : "${WATCHDOG_SUCCESS_MIN:=200}"
 : "${WATCHDOG_SUCCESS_MAX:=399}"
+: "${WATCHDOG_ACCEPTED_STATUS_CODES:=503}"
 
 load_config() {
     if [[ -f "$WATCHDOG_CONFIG" ]]; then
@@ -63,6 +64,18 @@ command_output() {
 
 valid_hostname() {
     [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.?$ ]]
+}
+
+status_is_accepted() {
+    local status="$1" accepted_code
+    if (( status >= WATCHDOG_SUCCESS_MIN && status <= WATCHDOG_SUCCESS_MAX )); then
+        return 0
+    fi
+    IFS=',' read -r -a accepted_codes <<< "$WATCHDOG_ACCEPTED_STATUS_CODES"
+    for accepted_code in "${accepted_codes[@]}"; do
+        [[ "$status" == "$accepted_code" ]] && return 0
+    done
+    return 1
 }
 
 discover_domains() {
@@ -106,7 +119,7 @@ health_check() {
         printf 'health_check_failed domain=%s detail=invalid_http_status:%s\n' "$domain" "$status" >&2
         return 1
     fi
-    if (( status < WATCHDOG_SUCCESS_MIN || status > WATCHDOG_SUCCESS_MAX )); then
+    if ! status_is_accepted "$status"; then
         printf 'health_check_failed domain=%s http_status=%s\n' "$domain" "$status" >&2
         return 1
     fi

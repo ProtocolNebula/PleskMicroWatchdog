@@ -105,6 +105,15 @@ EOF
     }
 }
 
+test_http_503_is_accepted_for_inactive_plesk_sites() {
+    cat > "$WATCHDOG_CURL_COMMAND" <<'EOF'
+#!/usr/bin/env bash
+printf '503\n'
+EOF
+    chmod +x "$WATCHDOG_CURL_COMMAND"
+    health_check 'inactive.example.com'
+}
+
 test_third_failure_restarts_once_per_pass() {
     cat > "$WATCHDOG_DOMAIN_COMMAND" <<'EOF'
 #!/usr/bin/env bash
@@ -155,6 +164,7 @@ EOF
 run_test test_domain_discovery_uses_site_list_only
 run_test test_health_check_adds_timestamp_query_and_accepts_redirect
 run_test test_failed_health_check_reports_curl_diagnostic
+run_test test_http_503_is_accepted_for_inactive_plesk_sites
 run_test test_third_failure_restarts_once_per_pass
 run_test test_success_does_not_reset_global_counter
 printf 'All tests passed.\n'
