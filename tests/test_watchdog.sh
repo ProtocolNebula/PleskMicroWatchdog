@@ -11,6 +11,9 @@ export WATCHDOG_STATE_DIR="$TEST_ROOT/state"
 export WATCHDOG_LOCK_FILE="$TEST_ROOT/watchdog.lock"
 export WATCHDOG_DELAY_SECONDS=0
 export WATCHDOG_FAILURE_THRESHOLD=3
+export WATCHDOG_RETRY_ATTEMPTS=3
+export WATCHDOG_RETRY_DELAY_SECONDS=0
+export WATCHDOG_DOMAIN_EXCEPTIONS="ignored.example.com"
 export WATCHDOG_RESTART_COOLDOWN_SECONDS=0
 export WATCHDOG_SCHEME="https"
 export WATCHDOG_PATH="/"
@@ -28,6 +31,9 @@ WATCHDOG_STATE_DIR=$WATCHDOG_STATE_DIR
 WATCHDOG_LOCK_FILE=$WATCHDOG_LOCK_FILE
 WATCHDOG_DELAY_SECONDS=0
 WATCHDOG_FAILURE_THRESHOLD=3
+WATCHDOG_RETRY_ATTEMPTS=3
+WATCHDOG_RETRY_DELAY_SECONDS=0
+WATCHDOG_DOMAIN_EXCEPTIONS=ignored.example.com
 WATCHDOG_RESTART_COOLDOWN_SECONDS=0
 WATCHDOG_SCHEME=https
 WATCHDOG_PATH=/
@@ -41,7 +47,7 @@ EOF
 
 cat > "$WATCHDOG_DOMAIN_COMMAND" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' 'example.com' 'blog.example.com' 'alias.example.net'
+printf '%s\n' 'example.com' 'blog.example.com' 'alias.example.net' 'ignored.example.com'
 EOF
 
 
@@ -70,10 +76,10 @@ run_test() {
     printf 'PASS: %s\n' "$name"
 }
 
-test_domain_discovery_uses_site_list_only() {
+test_domain_discovery_applies_configured_exceptions() {
     local domains
     domains="$(discover_domains)"
-    assert_equal $'example.com\nblog.example.com\nalias.example.net' "$domains" 'site list is the only domain source'
+    assert_equal $'example.com\nblog.example.com\nalias.example.net' "$domains" 'configured exceptions are excluded'
 }
 
 test_health_check_adds_timestamp_query_and_accepts_redirect() {
@@ -112,6 +118,17 @@ printf '503\n'
 EOF
     chmod +x "$WATCHDOG_CURL_COMMAND"
     health_check 'inactive.example.com'
+}
+
+test_three_502_responses_force_apache_restart() {
+    cat > "$WATCHDOG_CURL_COMMAND" <<'EOF'
+#!/usr/bin/env bash
+printf '502\n'
+EOF
+    chmod +x "$WATCHDOG_CURL_COMMAND"
+    local result=0
+    health_check 'bad-gateway.example.com' >/dev/null 2>&1 || result=$?
+    assert_equal '2' "$result" 'three HTTP 502 responses return the force-restart result'
 }
 
 test_third_failure_restarts_once_per_pass() {
@@ -161,10 +178,11 @@ EOF
     assert_equal '0' "$restarts" 'a successful domain does not hide previous failures'
 }
 
-run_test test_domain_discovery_uses_site_list_only
+run_test test_domain_discovery_applies_configured_exceptions
 run_test test_health_check_adds_timestamp_query_and_accepts_redirect
 run_test test_failed_health_check_reports_curl_diagnostic
 run_test test_http_503_is_accepted_for_inactive_plesk_sites
+run_test test_three_502_responses_force_apache_restart
 run_test test_third_failure_restarts_once_per_pass
 run_test test_success_does_not_reset_global_counter
 printf 'All tests passed.\n'

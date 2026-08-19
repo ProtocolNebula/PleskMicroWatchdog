@@ -16,8 +16,10 @@ For every pass:
 6. The process waits 30 seconds before checking the next domain.
 7. The global failure counter starts at zero at the beginning of every complete pass.
 8. Each failed domain increments the global counter. Successful domains do not reset it.
-9. The third failed domain in the same pass triggers one `systemctl restart apache2`.
-10. The pass stops after that restart and the next pass starts with a zero counter.
+9. Each domain is tried three times by default.
+10. If all three attempts return HTTP 502, Apache is restarted immediately.
+11. Other failed domains increment the global counter; the third such failure in one pass triggers one `systemctl restart apache2`.
+12. The pass stops after that restart and the next pass starts with a zero counter.
 
 Successful checks are not written to the event log. Restart attempts and results are written to `watchdog.log`.
 
@@ -90,6 +92,9 @@ Main settings:
 |---|---:|---|
 | `WATCHDOG_DELAY_SECONDS` | `30` | Delay between domain checks |
 | `WATCHDOG_FAILURE_THRESHOLD` | `3` | Failed domains in one pass before restart |
+| `WATCHDOG_RETRY_ATTEMPTS` | `3` | Attempts per domain health check |
+| `WATCHDOG_RETRY_DELAY_SECONDS` | `1` | Delay between attempts for the same domain |
+| `WATCHDOG_DOMAIN_EXCEPTIONS` | empty | Comma-separated exact domains ignored after the Plesk listing |
 | `WATCHDOG_RESTART_COOLDOWN_SECONDS` | `300` | Minimum time between restarts |
 | `WATCHDOG_CONNECT_TIMEOUT_SECONDS` | `10` | Curl connection timeout |
 | `WATCHDOG_REQUEST_TIMEOUT_SECONDS` | `30` | Curl total request timeout |
@@ -100,6 +105,14 @@ Main settings:
 | `WATCHDOG_ACCEPTED_STATUS_CODES` | `503` | Additional final HTTP status codes accepted as valid |
 
 HTTP 503 is accepted because Plesk may list inactive sites in `plesk bin site --list`; those sites can consistently return 503 and must not trigger Apache restarts. The first version intentionally uses one global counter per pass, not a persistent counter per domain.
+
+HTTP 502 is treated differently: the domain is retried three times. If every attempt returns 502, the watchdog forces an Apache restart immediately. Other HTTP errors and transport errors count toward the normal global failure threshold.
+
+To ignore domains returned by Plesk, edit the configuration using exact hostnames separated by commas:
+
+```bash
+WATCHDOG_DOMAIN_EXCEPTIONS=maintenance.example.com,legacy.example.net
+```
 
 ## Inspect the service / logs
 
