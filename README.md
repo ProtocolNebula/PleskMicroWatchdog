@@ -106,7 +106,7 @@ Main settings:
 
 HTTP 503 is accepted because Plesk may list inactive sites in `plesk bin site --list`; those sites can consistently return 503 and must not trigger Apache restarts. The first version intentionally uses one global counter per pass, not a persistent counter per domain.
 
-HTTP 502 is treated differently: the domain is retried three times. If every attempt returns 502, the watchdog forces an Apache restart immediately. Other HTTP errors and transport errors count toward the normal global failure threshold.
+HTTP 502, HTTP 504, and curl timeout errors (`exit code 28`) are treated as gateway/availability failures: the domain is retried three times. If all three attempts are one of those force-restart failures, the watchdog forces an Apache restart immediately. Other HTTP errors and transport errors count toward the normal global failure threshold.
 
 To ignore domains returned by Plesk, edit the configuration using exact hostnames separated by commas:
 

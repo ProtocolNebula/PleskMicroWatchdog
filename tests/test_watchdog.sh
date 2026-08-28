@@ -131,6 +131,29 @@ EOF
     assert_equal '2' "$result" 'three HTTP 502 responses return the force-restart result'
 }
 
+test_three_504_responses_force_apache_restart() {
+    cat > "$WATCHDOG_CURL_COMMAND" <<'EOF'
+#!/usr/bin/env bash
+printf '504\n'
+EOF
+    chmod +x "$WATCHDOG_CURL_COMMAND"
+    local result=0
+    health_check 'gateway-timeout.example.com' >/dev/null 2>&1 || result=$?
+    assert_equal '2' "$result" 'three HTTP 504 responses return the force-restart result'
+}
+
+test_three_timeouts_force_apache_restart() {
+    cat > "$WATCHDOG_CURL_COMMAND" <<'EOF'
+#!/usr/bin/env bash
+printf 'curl: (28) Operation timed out\n' >&2
+exit 28
+EOF
+    chmod +x "$WATCHDOG_CURL_COMMAND"
+    local result=0
+    health_check 'timeout.example.com' >/dev/null 2>&1 || result=$?
+    assert_equal '2' "$result" 'three curl timeouts return the force-restart result'
+}
+
 test_third_failure_restarts_once_per_pass() {
     cat > "$WATCHDOG_DOMAIN_COMMAND" <<'EOF'
 #!/usr/bin/env bash
@@ -183,6 +206,8 @@ run_test test_health_check_adds_timestamp_query_and_accepts_redirect
 run_test test_failed_health_check_reports_curl_diagnostic
 run_test test_http_503_is_accepted_for_inactive_plesk_sites
 run_test test_three_502_responses_force_apache_restart
+run_test test_three_504_responses_force_apache_restart
+run_test test_three_timeouts_force_apache_restart
 run_test test_third_failure_restarts_once_per_pass
 run_test test_success_does_not_reset_global_counter
 printf 'All tests passed.\n'

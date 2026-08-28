@@ -114,11 +114,12 @@ health_url() {
 }
 
 health_check_once() {
-    local domain="$1" url status response
+    local domain="$1" url status response command_status=0
     url="$(health_url "$domain")"
     LAST_HEALTH_STATUS=''
     LAST_HEALTH_DETAIL=''
-    if ! response="$(run_command "$WATCHDOG_CURL_COMMAND" \
+    LAST_HEALTH_ERROR_CODE=0
+    if response="$(run_command "$WATCHDOG_CURL_COMMAND" \
         --silent --show-error --location --insecure \
         --connect-timeout "$WATCHDOG_CONNECT_TIMEOUT_SECONDS" \
         --max-time "$WATCHDOG_REQUEST_TIMEOUT_SECONDS" \
@@ -126,7 +127,13 @@ health_check_once() {
         --header 'Cache-Control: no-cache, no-store, max-age=0' \
         --header 'Pragma: no-cache' \
         --output /dev/null --write-out '%{http_code}' "$url" 2>&1)"; then
+        command_status=0
+    else
+        command_status=$?
+    fi
+    if (( command_status != 0 )); then
         LAST_HEALTH_DETAIL="${response//$'\n'/ }"
+        LAST_HEALTH_ERROR_CODE="$command_status"
         return 1
     fi
     status="$response"
@@ -139,20 +146,24 @@ health_check_once() {
 }
 
 health_check() {
-    local domain="$1" attempt all_502=1
+    local domain="$1" attempt all_force_failures=1
     for (( attempt = 1; attempt <= WATCHDOG_RETRY_ATTEMPTS; attempt++ )); do
         if health_check_once "$domain"; then
             return 0
         fi
-        [[ "$LAST_HEALTH_STATUS" == '502' ]] || all_502=0
+        if [[ "$LAST_HEALTH_STATUS" != '502' && "$LAST_HEALTH_STATUS" != '504' && \
+            "$LAST_HEALTH_ERROR_CODE" != '28' ]]; then
+            all_force_failures=0
+        fi
         if (( attempt < WATCHDOG_RETRY_ATTEMPTS )); then
             run_command "$WATCHDOG_SLEEP_COMMAND" "$WATCHDOG_RETRY_DELAY_SECONDS"
         fi
     done
 
-    if (( all_502 == 1 )); then
-        printf 'health_check_failed domain=%s http_status=502 attempts=%s force_restart=true\n' \
-            "$domain" "$WATCHDOG_RETRY_ATTEMPTS" >&2
+    if (( all_force_failures == 1 )); then
+        printf 'health_check_failed domain=%s status=%s attempts=%s force_restart=true\n' \
+            "$domain" "${LAST_HEALTH_STATUS:-curl_exit_${LAST_HEALTH_ERROR_CODE:-unknown}}" \
+            "$WATCHDOG_RETRY_ATTEMPTS" >&2
         return 2
     fi
     if [[ -n "$LAST_HEALTH_STATUS" ]]; then
